@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Расставь по полкам</title>
+<style>
+:root{
+  --bg:#f3ecdf; --ink:#2b2a33; --muted:#7a7468;
+  --wall:#e9dfcd; --board:#c98f5a; --board-d:#a56f3e; --cellbg:#fbf6ec; --slot:#efe6d4;
+  --sel:#3f6df0; --ok:#3aa56b; --bad:#d9534f; --btn:#2b2a33; --btn-ink:#fbf6ec;
+  --z0:#4f9fd1; --z1:#d9a031; --z2:#c4714a;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#1f1d24; --ink:#f1eadc; --muted:#a39d90;
+    --wall:#2a2730; --board:#8a5e3a; --board-d:#6b4528; --cellbg:#38343f; --slot:#2d2a34;
+    --sel:#7b9bff; --ok:#56c488; --bad:#ef7b77; --btn:#f1eadc; --btn-ink:#1f1d24;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#1f1d24; --ink:#f1eadc; --muted:#a39d90;
+  --wall:#2a2730; --board:#8a5e3a; --board-d:#6b4528; --cellbg:#38343f; --slot:#2d2a34;
+  --sel:#7b9bff; --ok:#56c488; --bad:#ef7b77; --btn:#f1eadc; --btn-ink:#1f1d24;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Nunito","Trebuchet MS",system-ui,sans-serif;min-height:100vh;display:flex;justify-content:center}
+.app{width:100%;max-width:480px;padding:20px 14px 28px}
+h1{margin:0 0 4px;font-size:26px;font-weight:800}
+p.hint{margin:0 0 14px;color:var(--muted);font-size:15px}
+.bar{display:flex;gap:8px;margin-bottom:12px}
+.stat{flex:1;background:var(--wall);border-radius:14px;padding:8px 10px}
+.stat b{display:block;font-size:21px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.stat.low b{color:var(--bad)}
+.track{height:8px;border-radius:4px;background:var(--wall);overflow:hidden;margin-bottom:16px}
+.fill{height:100%;width:100%;background:var(--ok);transition:width .3s ease,background .3s}
+.stage{position:relative}
+.rack{background:var(--wall);border-radius:18px;padding:10px 10px 4px}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 4px}
+.heads{margin-bottom:8px}
+.head{text-align:center;font-weight:800;font-size:13px;line-height:1.15;padding:6px 2px;border-radius:10px;background:color-mix(in srgb,var(--acc) 22%,transparent);border-bottom:3px solid var(--acc)}
+.head small{display:block;font-size:14px;font-weight:400;margin-top:2px;letter-spacing:1px}
+.shelf{margin-bottom:10px}
+.cell{background:var(--cellbg);border-radius:12px;border-top:4px solid var(--acc,var(--board));padding:6px 4px;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;transition:background .25s,box-shadow .25s,transform .25s}
+.row>.cell:nth-child(1),.row>.head:nth-child(1){--acc:var(--z0)}
+.row>.cell:nth-child(2),.row>.head:nth-child(2){--acc:var(--z1)}
+.row>.cell:nth-child(3),.row>.head:nth-child(3){--acc:var(--z2)}
+.cell.match{box-shadow:0 0 0 3px var(--ok);background:color-mix(in srgb,var(--ok) 28%,var(--cellbg));transform:scale(1.04)}
+.cell.locked{background:color-mix(in srgb,var(--ok) 22%,var(--cellbg));box-shadow:inset 0 0 0 2px var(--ok)}
+.cell.locked .slot{background:transparent;cursor:default;color:inherit}
+.cell.wrong{box-shadow:inset 0 0 0 2px var(--bad)}
+.board{height:12px;background:var(--board);border-bottom:4px solid var(--board-d);border-radius:0 0 6px 6px}
+.slot{aspect-ratio:1;border:0;border-radius:9px;background:var(--slot);font-size:clamp(20px,6.4vw,30px);line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s;font-family:inherit;color:inherit;padding:0;min-width:0}
+.slot:focus-visible{outline:3px solid var(--sel);outline-offset:1px}
+.slot.sel{transform:translateY(-5px) scale(1.12);box-shadow:0 0 0 3px var(--sel),0 8px 12px rgba(0,0,0,.25);z-index:1}
+.slot.empty{opacity:.55}
+.store{margin-top:14px;background:var(--wall);border-radius:18px;padding:10px 14px 12px;display:flex;align-items:center;gap:14px}
+.store .lab{font-weight:800;font-size:14px;flex:1;line-height:1.2}
+.store .lab small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:2px}
+.store .cell{width:58%;border-top-color:var(--board-d);border-top-width:4px;border-style:solid;border-bottom:4px solid var(--board-d);border-left:0;border-right:0}
+@media (prefers-reduced-motion:reduce){.slot,.fill,.cell{transition:none}}
+.row2{display:flex;gap:10px;margin-top:14px}
+button.main.alt{background:var(--wall);color:var(--ink)}
+button.main:disabled{opacity:.5;cursor:default}
+button.main{flex:1;border:0;border-radius:14px;background:var(--btn);color:var(--btn-ink);font:800 16px inherit;font-family:inherit;padding:14px;cursor:pointer}
+.overlay{position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 88%,transparent);border-radius:18px;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;gap:6px;z-index:2}
+.overlay.show{display:flex}
+.overlay .big{font-size:56px}
+.overlay h2{margin:0;font-size:24px}
+.overlay p{margin:0 0 12px;color:var(--muted)}
+.overlay button{border:0;border-radius:14px;background:var(--btn);color:var(--btn-ink);font:800 16px inherit;font-family:inherit;padding:12px 26px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Расставь по полкам</h1>
+  <p class="hint">Нажми на товар, затем на свободное место, чтобы переставить. Меняться местами товары не могут, поэтому без мини-склада не обойтись. Ячейка закрывается, когда в ней три одинаковых товара из нужной зоны. Красная рамка значит, что товар не из этой зоны. Ходов ограничено, а отмен всего 3: с каждым уровнем ходов меньше.</p>
+  <div class="bar">
+    
+    <div class="stat"><b id="got">0/9</b><span>собрано</span></div>
+    <div class="stat" id="mstat"><b id="moves">0</b><span>ходов осталось</span></div>
+    <div class="stat"><b id="lvl">1</b><span>уровень</span></div>
+  </div>
+  <div class="track"><div class="fill" id="fill"></div></div>
+  <div class="stage">
+    <div class="rack">
+      <div class="row heads" id="heads"></div>
+      <div id="shelves"></div>
+    </div>
+    <div class="store">
+      <div class="lab">Мини-склад<small>Временное место для манёвров</small></div>
+      <div id="store" style="width:58%"></div>
+    </div>
+    <div class="overlay" id="ov">
+      <div class="big" id="ovEmoji"></div>
+      <h2 id="ovTitle"></h2>
+      <p id="ovText"></p>
+      <button id="ovBtn"></button>
+    </div>
+  </div>
+  <div class="row2"><button class="main alt" id="undo">Отменить ход (3)</button><button class="main" id="restart">Начать заново</button></div>
+</div>
+<script>
+const ZONES=[{name:"Холодильник"},{name:"Овощи и фрукты"},{name:"Бакалея"}];
+const ITEMS=["🥚","🧀","🥛","🍎","🥕","🍇","🍞","🥨","🍪"];
+const zoneOf=i=>Math.floor(i/3);
+const BASE_TIME=150, CELLS=9, STORE=9;
+let slots=[],sel=null,moves=0,level=1,total=BASE_TIME,left=BASE_TIME,timer=null,over=false,busy=false,cleared=0,matching=[],locked=[],movesLeft=0,maxMoves=0,undos=3,hist=[];
+const $=id=>document.getElementById(id);
+
+function scan(g){
+  const ok=[],wrong=[];
+  for(let c=0;c<CELLS;c++){
+    if(locked.includes(c))continue;
+    const a=g[c*3];
+    if(a>=0&&g[c*3+1]===a&&g[c*3+2]===a)(zoneOf(a)===c%3?ok:wrong).push(c);
+  }
+  return{ok,wrong};
+}
+function newGame(){
+  locked=[];
+  let g=[];
+  ITEMS.forEach((_,i)=>g.push(i,i,i));
+  do{for(let i=g.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[g[i],g[j]]=[g[j],g[i]]}
+    var s=scan(g.concat([-1,-1,-1]))}while(s.ok.length||s.wrong.length);
+  slots=g.concat([-1,-1,-1]);
+  sel=null;moves=0;over=false;busy=false;cleared=0;matching=[];maxMoves=Math.max(45,100-(level-1)*6);movesLeft=maxMoves;undos=3;hist=[];
+  
+  $("ov").classList.remove("show");
+  const h=$("heads");h.innerHTML="";
+  ZONES.forEach((z,k)=>{
+    const d=document.createElement("div");d.className="head";
+    d.innerHTML=z.name+"<small>"+ITEMS.slice(k*3,k*3+3).join("")+"</small>";
+    h.appendChild(d);
+  });
+  render();updateHud();
+  clearInterval(timer);
+  
+}
+
+function updateHud(){
+  
+  $("moves").textContent=movesLeft;$("mstat").classList.toggle("low",movesLeft<=8);$("undo").textContent="Отменить ход ("+undos+")";$("undo").disabled=undos<=0||!hist.length;
+  $("lvl").textContent=level;
+  $("got").textContent=cleared+"/"+CELLS;
+  
+  const f=$("fill");f.style.width=(movesLeft/maxMoves*100)+"%";
+  f.style.background=movesLeft<=8?"var(--bad)":"var(--ok)";
+}
+function makeCell(c,wrong){
+  const cell=document.createElement("div");
+  cell.className="cell"+(matching.includes(c)?" match":"")+(locked.includes(c)?" locked":"")+(wrong.includes(c)?" wrong":"");
+  for(let p=0;p<3;p++){
+    const i=c*3+p;
+    const b=document.createElement("button");
+    b.className="slot"+(sel===i?" sel":"")+(slots[i]<0?" empty":"");
+    b.textContent=slots[i]>=0?ITEMS[slots[i]]:"";
+    b.setAttribute("aria-label",slots[i]>=0?ITEMS[slots[i]]:"Пустое место");
+    if(locked.includes(c))b.disabled=true;
+    b.onclick=()=>pick(i);
+    cell.appendChild(b);
+  }
+  return cell;
+}
+function render(){
+  const wrong=scan(slots).wrong;
+  const box=$("shelves");box.innerHTML="";
+  for(let s=0;s<3;s++){
+    const sh=document.createElement("div");sh.className="shelf";
+    const row=document.createElement("div");row.className="row";
+    for(let k=0;k<3;k++)row.appendChild(makeCell(s*3+k,wrong));
+    const bd=document.createElement("div");bd.className="board";
+    sh.append(row,bd);box.appendChild(sh);
+  }
+  const st=$("store");st.innerHTML="";
+  const sc=makeCell(STORE,[]);sc.style.cssText="width:100%;border-top-color:var(--board-d)";
+  st.appendChild(sc);
+}
+function pick(i){
+  if(over||busy)return;
+  if(sel===null){
+    if(slots[i]<0)return;
+    sel=i;render();return;
+  }
+  if(sel===i){sel=null;render();return}
+  if(slots[i]>=0){sel=i;render();return}
+  hist.push({s:slots.slice(),l:locked.slice(),c:cleared});slots[i]=slots[sel];slots[sel]=-1;
+  sel=null;moves++;movesLeft--;
+  matching=scan(slots).ok;if(!matching.length&&movesLeft<=0){render();updateHud();finish(false);return}
+  render();updateHud();
+  if(matching.length){
+    busy=true;
+    setTimeout(()=>{
+      matching.forEach(c=>{locked.push(c);cleared++});
+      matching=[];busy=false;
+      render();updateHud();
+      if(cleared>=CELLS)finish(true);else if(movesLeft<=0)finish(false);
+    },450);
+  }
+}
+function finish(win){
+  over=true;clearInterval(timer);
+  $("ov").classList.add("show");
+  if(win){
+    $("ovEmoji").textContent="✨";
+    $("ovTitle").textContent="Магазин готов к открытию!";
+    $("ovText").textContent="Использовано ходов: "+moves+" из "+maxMoves+". На следующем уровне лимит: "+Math.max(45,100-level*6)+".";
+    $("ovBtn").textContent="Следующий уровень";
+    $("ovBtn").onclick=()=>{level++;newGame()};
+  }else{
+    $("ovEmoji").textContent="📦";
+    $("ovTitle").textContent="Ходы закончились";
+    $("ovText").textContent="Закрыто ячеек: "+cleared+" из "+CELLS+". Расклад будет новый.";
+    $("ovBtn").textContent="Играть снова";
+    $("ovBtn").onclick=()=>{newGame()};
+  }
+}
+$("restart").onclick=()=>{level=1;newGame()};
+$("undo").onclick=()=>{
+  if(over||busy||undos<=0||!hist.length)return;
+  const h=hist.pop();slots=h.s;locked=h.l;cleared=h.c;matching=[];sel=null;movesLeft++;moves--;undos--;
+  render();updateHud();
+};
+newGame();
+</script>
+</body>
+</html>
