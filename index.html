@@ -80,7 +80,7 @@ button.main{flex:1;border:0;border-radius:14px;background:var(--btn);color:var(-
 <body>
 <div class="app">
   <h1>Расставь по полкам</h1>
-  <p class="hint">Нажми на товар, затем на свободное место, чтобы переставить. Меняться местами товары не могут, поэтому без мини-склада не обойтись. Ячейка закрывается, когда в ней три одинаковых товара из нужной зоны. Красная рамка значит, что товар не из этой зоны. Ходов ограничено, а отмен всего 3: с каждым уровнем ходов меньше.</p>
+  <p class="hint">Нажми на товар, затем на свободное место, чтобы переставить. Меняться местами товары не могут, поэтому без мини-склада не обойтись. Ячейка закрывается, когда в ней три одинаковых товара из нужной зоны. Красная рамка значит, что товар не из этой зоны. Всего 10 уровней: ходов с каждым уровнем меньше, а на последнем нужно уложиться в минимум. Отмен всего 3.</p>
   <div class="bar">
     
     <div class="stat"><b id="got">0/9</b><span>собрано</span></div>
@@ -110,7 +110,7 @@ button.main{flex:1;border:0;border-radius:14px;background:var(--btn);color:var(-
 const ZONES=[{name:"Холодильник"},{name:"Овощи и фрукты"},{name:"Бакалея"}];
 const ITEMS=["🥚","🧀","🥛","🍎","🥕","🍇","🍞","🥨","🍪"];
 const zoneOf=i=>Math.floor(i/3);
-const BASE_TIME=150, CELLS=9, STORE=9;
+const BASE_TIME=150, CELLS=9, STORE=9, MAX_LEVEL=10;
 let slots=[],sel=null,moves=0,level=1,total=BASE_TIME,left=BASE_TIME,timer=null,over=false,busy=false,cleared=0,matching=[],locked=[],movesLeft=0,maxMoves=0,undos=3,hist=[];
 const $=id=>document.getElementById(id);
 
@@ -123,6 +123,23 @@ function scan(g){
   }
   return{ok,wrong};
 }
+function optMoves(g){
+  let best=1e9;
+  const P=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+  for(const a of P)for(const b of P)for(const d of P){
+    const perms=[a,b,d],target=[];
+    for(let k=0;k<3;k++)for(let t=0;t<3;t++)target[k*3+t]=perms[k][t]*3+k;
+    let M=0;const par=[0,1,2,3,4,5,6,7,8],touched=new Set();
+    const f=x=>{while(par[x]!==x){par[x]=par[par[x]];x=par[x]}return x};
+    for(let c=0;c<9;c++)for(let p=0;p<3;p++){
+      const dst=target[g[c*3+p]];
+      if(dst!==c){M++;par[f(c)]=f(dst);touched.add(c);touched.add(dst)}
+    }
+    const comps=new Set([...touched].map(f)).size;
+    best=Math.min(best,M+comps);
+  }
+  return best;
+}
 function newGame(){
   locked=[];
   let g=[];
@@ -130,7 +147,7 @@ function newGame(){
   do{for(let i=g.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[g[i],g[j]]=[g[j],g[i]]}
     var s=scan(g.concat([-1,-1,-1]))}while(s.ok.length||s.wrong.length);
   slots=g.concat([-1,-1,-1]);
-  sel=null;moves=0;over=false;busy=false;cleared=0;matching=[];maxMoves=Math.max(45,100-(level-1)*6);movesLeft=maxMoves;undos=3;hist=[];
+  sel=null;moves=0;over=false;busy=false;cleared=0;matching=[];maxMoves=Math.ceil(optMoves(g)*(1+(MAX_LEVEL-level)*1.5/(MAX_LEVEL-1))-1e-9);movesLeft=maxMoves;undos=3;hist=[];
   
   $("ov").classList.remove("show");
   const h=$("heads");h.innerHTML="";
@@ -147,7 +164,7 @@ function newGame(){
 function updateHud(){
   
   $("moves").textContent=movesLeft;$("mstat").classList.toggle("low",movesLeft<=8);$("undo").textContent="Отменить ход ("+undos+")";$("undo").disabled=undos<=0||!hist.length;
-  $("lvl").textContent=level;
+  $("lvl").textContent=level+"/"+MAX_LEVEL;
   $("got").textContent=cleared+"/"+CELLS;
   
   const f=$("fill");f.style.width=(movesLeft/maxMoves*100)+"%";
@@ -210,9 +227,9 @@ function finish(win){
   if(win){
     $("ovEmoji").textContent="✨";
     $("ovTitle").textContent="Магазин готов к открытию!";
-    $("ovText").textContent="Использовано ходов: "+moves+" из "+maxMoves+". На следующем уровне лимит: "+Math.max(45,100-level*6)+".";
-    $("ovBtn").textContent="Следующий уровень";
-    $("ovBtn").onclick=()=>{level++;newGame()};
+    $("ovText").textContent="Использовано ходов: "+moves+" из "+maxMoves+". Дальше ходов будет меньше.";
+    if(level>=MAX_LEVEL){$("ovEmoji").textContent="🏆";$("ovTitle").textContent="Игра пройдена!";$("ovText").textContent="Все 10 уровней позади. Финал пройден ровно за "+moves+" ходов, это идеальный результат.";$("ovBtn").textContent="Играть сначала";}else $("ovBtn").textContent="Следующий уровень";
+    $("ovBtn").onclick=()=>{level=level>=MAX_LEVEL?1:level+1;newGame()};
   }else{
     $("ovEmoji").textContent="📦";
     $("ovTitle").textContent="Ходы закончились";
